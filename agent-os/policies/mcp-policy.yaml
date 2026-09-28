@@ -1,0 +1,8 @@
+version: 1
+mcp:
+  default: deny-write
+  allow_read:
+    - "docs"
+    - "repo-readonly"
+    - "context7"
+  allow_write: []

@@ -1,0 +1,17 @@
+version: 1
+cli: codex
+context_filename: AGENTS.md
+output_subdir: codex
+config_filename: config.toml
+hooks_subdir: hooks
+rules_subdir: rules
+rules_filename: agentic-os.rules
+hooks:
+  - event: tool.before
+    matcher: ""
+    script: tool_before.py
+    native_event: tool.before
+# Locked decision #8: Codex enforcement is via execpolicy .rules; hooks are guardrails.
+deny_exit_code: 2
+allow_exit_code: 0
+hook_root_env: ""

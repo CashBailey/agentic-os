@@ -1,0 +1,23 @@
+version: 1
+cli: claude
+context_filename: CLAUDE.md
+output_subdir: claude
+settings_filename: settings.json
+hooks_subdir: hooks
+hooks:
+  - event: tool.before
+    matcher: Bash
+    script: pre_tool_use.py
+    native_event: PreToolUse
+  - event: tool.before
+    matcher: Write|Edit|MultiEdit
+    script: pre_file_write.py
+    native_event: PreToolUse
+  - event: session.start
+    matcher: ""
+    script: session_start.py
+    native_event: SessionStart
+# Claude blocks tool calls when the hook exits with code 2.
+deny_exit_code: 2
+allow_exit_code: 0
+hook_root_env: "${CLAUDE_PROJECT_DIR}"

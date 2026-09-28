@@ -1,0 +1,5 @@
+version: 1
+approval:
+  destructive_requires_reason: true
+  external_publication_requires_confirmation: true
+  ttl_seconds: 300

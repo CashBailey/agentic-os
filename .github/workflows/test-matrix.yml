@@ -1,0 +1,214 @@
+name: test-matrix
+
+# AgenticOS verification matrix.
+#
+# - pr-fast: T1-T3 probes across (os x python x postgres). Runs on every PR
+#   and on the nightly schedule. macOS rows are best-effort
+#   (continue-on-error: true) because we don't run a Postgres service
+#   container there; pg-dependent probes honour SKIP_PG=1.
+# - nightly-full: T4-T5 probes on a single cell (ubuntu-24.04 / py3.12 / pg16)
+#   to keep cost bounded. Skipped on pull_request.
+#
+# Windows is intentionally omitted. WSL2 coverage can be added later by hand;
+# pretending it works today would be dishonest.
+
+on:
+  pull_request:
+    branches: ["**"]
+  schedule:
+    # Nightly at 07:00 UTC.
+    - cron: "0 7 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  pr-fast:
+    name: pr-fast (T1-T3) ${{ matrix.os }} / py${{ matrix.python }} / pg${{ matrix.postgres }}
+    runs-on: ${{ matrix.os }}
+    # macOS rows are best-effort (no pg service container).
+    continue-on-error: ${{ matrix.os == 'macos-14' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04, macos-14]
+        python: ["3.11", "3.12"]
+        postgres: ["15", "16"]
+
+    env:
+      # Probes read these to talk to the pg service on Linux runners.
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: agenticos_test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/agenticos_test
+      # macOS rows have no pg service; probes should honour this.
+      SKIP_PG: ${{ matrix.os == 'macos-14' && '1' || '0' }}
+
+    # NOTE: `services:` only spin up on Linux runners. On macos-14 the block
+    # is silently ignored by the runner, which is why SKIP_PG=1 there.
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agenticos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agenticos_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install project (editable + dev)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip wheel
+          # Prefer editable install with dev extras; fall back gracefully.
+          if python -m pip install -e '.[dev]'; then
+            echo "Installed via pyproject extras [dev]."
+          elif python -m pip install -e '.'; then
+            echo "Installed editable without dev extras (no [dev] extra defined)."
+          else
+            echo "Editable install failed; trying requirements files."
+            for req in requirements.txt requirements-dev.txt requirements/dev.txt; do
+              if [ -f "$req" ]; then
+                echo "pip install -r $req"
+                python -m pip install -r "$req"
+              fi
+            done
+          fi
+
+      - name: T1 - CLI help
+        shell: bash
+        run: bash verification/probes/cli_help.sh
+
+      - name: T2 - pytest (unit)
+        shell: bash
+        run: bash verification/probes/pytest_unit.sh
+
+      - name: T3 - pytest (backend)
+        shell: bash
+        run: bash verification/probes/pytest_backend.sh
+
+      - name: Upload verification results (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.os }}-py${{ matrix.python }}-pg${{ matrix.postgres }}
+          path: verification/results/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  nightly-full:
+    name: nightly-full (T4-T5)
+    # Cost guard: never on PRs. Schedule + manual only.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: agenticos_test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/agenticos_test
+      SKIP_PG: "0"
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agenticos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agenticos_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project (editable + dev)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip wheel
+          if python -m pip install -e '.[dev]'; then
+            echo "Installed via pyproject extras [dev]."
+          elif python -m pip install -e '.'; then
+            echo "Installed editable without dev extras."
+          else
+            for req in requirements.txt requirements-dev.txt requirements/dev.txt; do
+              if [ -f "$req" ]; then
+                python -m pip install -r "$req"
+              fi
+            done
+          fi
+
+      - name: T4 - generated determinism
+        shell: bash
+        run: bash verification/probes/generated_determinism.sh
+
+      - name: T4 - markdown roundtrip
+        shell: bash
+        run: bash verification/probes/markdown_roundtrip.sh
+
+      - name: T4 - exec policy check
+        shell: bash
+        run: bash verification/probes/execpolicy_check.sh
+
+      - name: T4 - ports localhost
+        shell: bash
+        run: bash verification/probes/ports_localhost.sh
+
+      - name: T4 - install adapter subtree
+        shell: bash
+        run: bash verification/probes/install_adapter_subtree.sh
+
+      - name: T5 - audit emission
+        shell: bash
+        run: python verification/probes/audit_emission.py
+
+      - name: T5 - credential blind
+        shell: bash
+        run: python verification/probes/credential_blind.py
+
+      - name: T5 - redaction
+        shell: bash
+        run: python verification/probes/redaction.py
+
+      - name: Upload verification results (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-nightly-full-ubuntu-24.04-py3.12-pg16
+          path: verification/results/
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,0 +1,16 @@
+version: 1
+cli: gemini
+context_filename: GEMINI.md
+output_subdir: gemini
+settings_filename: settings.json
+hooks_subdir: hooks
+hooks:
+  - event: tool.before
+    matcher: ""
+    script: before_tool.py
+    native_event: BeforeTool
+# Locked decision #9: Gemini deny via JSON {"decision":"deny"} on exit 0; exit 2 is emergency brake.
+deny_exit_code: 0
+deny_via_json: true
+allow_exit_code: 0
+hook_root_env: ""

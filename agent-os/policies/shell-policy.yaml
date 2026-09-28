@@ -1,0 +1,86 @@
+version: 1
+# Default decision when no rule matches.
+# Locked decision #7: 'prompt' (defense in depth).
+shell:
+  default: prompt
+  forbidden:
+    - pattern: ["rm", "-rf", "/"]
+      reason: "Never delete filesystem root."
+    - pattern: ["rm", "-rf", "/*"]
+      reason: "Globbed root deletion is forbidden."
+    - pattern: ["rm", "-rf", "~"]
+      reason: "Never recursively delete home directory."
+    - pattern: ["dd", "if=*", "of=/dev/*"]
+      reason: "Raw device writes are destructive."
+    - pattern: ["mkfs", "*"]
+      reason: "Filesystem creation is destructive."
+    - pattern: ["mkfs.ext4", "*"]
+      reason: "Filesystem creation is destructive."
+    - pattern: ["docker", "compose", "down", "-v"]
+      reason: "Volume deletion requires explicit backup."
+    - pattern: ["docker", "system", "prune", "-a", "*"]
+      reason: "Aggressive image/volume pruning."
+    - pattern: ["git", "push", "--force"]
+      reason: "Force push rewrites remote history; use --force-with-lease via prompt path."
+    - pattern: ["git", "push", "-f", "*"]
+      reason: "Force push rewrites remote history."
+    - pattern: ["git", "reset", "--hard", "*"]
+      reason: "Hard reset discards uncommitted work."
+    - pattern: ["chmod", "-R", "777", "*"]
+      reason: "World-writable recursion is unsafe."
+  prompt:
+    - pattern: ["git", "push", "*"]
+      reason: "External publication."
+    - pattern: ["git", "push"]
+      reason: "External publication."
+    - pattern: ["gh", "pr", "merge", "*"]
+      reason: "Merging requires approval."
+    - pattern: ["gh", "pr", "create", "*"]
+      reason: "External publication."
+    - pattern: ["npm", "publish", "*"]
+      reason: "Publishes a package to a registry."
+    - pattern: ["pip", "install", "*"]
+      reason: "System mutation: installs packages."
+    - pattern: ["uv", "pip", "install", "*"]
+      reason: "System mutation: installs packages."
+    - pattern: ["apt", "install", "*"]
+      reason: "System mutation: installs packages."
+    - pattern: ["apt-get", "install", "*"]
+      reason: "System mutation: installs packages."
+    - pattern: ["sudo", "*"]
+      reason: "Privilege escalation requires explicit consent."
+    - pattern: ["curl", "*"]
+      reason: "Network egress to arbitrary host."
+    - pattern: ["wget", "*"]
+      reason: "Network egress to arbitrary host."
+  allow:
+    - pattern: ["git", "status"]
+    - pattern: ["git", "diff", "*"]
+    - pattern: ["git", "diff"]
+    - pattern: ["git", "log", "*"]
+    - pattern: ["git", "log"]
+    - pattern: ["git", "show", "*"]
+    - pattern: ["git", "branch"]
+    - pattern: ["git", "branch", "*"]
+    - pattern: ["git", "fetch"]
+    - pattern: ["git", "fetch", "*"]
+    - pattern: ["git", "remote", "*"]
+    - pattern: ["git", "config", "--get", "*"]
+    - pattern: ["ls"]
+    - pattern: ["ls", "*"]
+    - pattern: ["pwd"]
+    - pattern: ["cat", "*"]
+    - pattern: ["head", "*"]
+    - pattern: ["tail", "*"]
+    - pattern: ["rg", "*"]
+    - pattern: ["grep", "*"]
+    - pattern: ["sed", "-n", "*"]
+    - pattern: ["awk", "*"]
+    - pattern: ["find", "*"]
+    - pattern: ["which", "*"]
+    - pattern: ["whoami"]
+    - pattern: ["echo", "*"]
+    - pattern: ["pytest", "*"]
+    - pattern: ["pytest"]
+    - pattern: ["python", "-m", "pytest", "*"]
+    - pattern: ["python3", "-m", "pytest", "*"]

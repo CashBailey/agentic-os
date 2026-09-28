@@ -1,0 +1,22 @@
+version: 1
+files:
+  protected:
+    - ".env"
+    - ".env.*"
+    - "*.pem"
+    - "*.key"
+    - "*.p12"
+    - "id_rsa"
+    - "id_ed25519"
+    - "agent-os/private/**"
+    - "**/*.local.md"
+    - "~/.codex/auth.json"
+    - "~/.codex/config.toml"
+    - "~/.claude/.credentials.json"
+    - "~/.config/gemini/**"
+    - "~/.aws/credentials"
+    - "~/.ssh/**"
+  generated_roots:
+    - "agent-os/generated/"
+    - "agent-os/outputs/"
+  workspace_roots: []
